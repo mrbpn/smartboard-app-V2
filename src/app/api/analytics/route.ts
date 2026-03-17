@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { lessons, quizzes, session_recordings, responses, quiz_sessions } from "@/lib/schema";
