@@ -22,28 +22,41 @@ export async function POST(req: Request) {
     let text = "";
 
     if (groqKey) {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          model: "llama-3.2-11b-vision-preview",
-          messages: [{
-            role: "user",
-            content: [
-              { type: "text", text: ocrPrompt },
-              { type: "image_url", image_url: { url: image } },
-            ],
-          }],
-          temperature: 0.1,
-          max_tokens: 1024,
-        }),
-      });
-      if (res.ok) {
-        const d = await res.json();
-        text = d.choices?.[0]?.message?.content ?? "";
-      } else {
-        const err = await res.json().catch(() => ({}));
-        console.error("[whiteboard/ocr] Groq error:", JSON.stringify(err));
+      const VISION_MODELS = [
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "llama-3.2-11b-vision-preview",
+        "llama-3.2-90b-vision-preview",
+      ];
+      for (const model of VISION_MODELS) {
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${groqKey}` },
+          body: JSON.stringify({
+            model,
+            messages: [{
+              role: "user",
+              content: [
+                { type: "text", text: ocrPrompt },
+                { type: "image_url", image_url: { url: image } },
+              ],
+            }],
+            temperature: 0.1,
+            max_tokens: 1024,
+          }),
+        });
+        if (res.ok) {
+          const d = await res.json();
+          text = d.choices?.[0]?.message?.content ?? "";
+          if (text) break;
+        } else {
+          const err = await res.json().catch(() => ({}));
+          const msg = err?.error?.message ?? "";
+          console.error(`[whiteboard/ocr] Groq (${model}) error:`, msg);
+          if (!msg.toLowerCase().includes("model") && !msg.toLowerCase().includes("not found") && !msg.toLowerCase().includes("decommissioned")) {
+            text = `❌ OCR error: ${msg}`;
+            break;
+          }
+        }
       }
     }
 

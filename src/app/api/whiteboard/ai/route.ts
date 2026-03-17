@@ -39,30 +39,47 @@ async function callGroqText(key: string, prompt: string): Promise<string> {
   return d.choices?.[0]?.message?.content ?? "";
 }
 
+// Try Groq vision with multiple model fallbacks
 async function callGroqVision(key: string, prompt: string, imageDataUrl: string): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: "llama-3.2-11b-vision-preview",
-      messages: [{
-        role: "user",
-        content: [
-          { type: "text", text: prompt },
-          { type: "image_url", image_url: { url: imageDataUrl } },
-        ],
-      }],
-      temperature: 0.2,
-      max_tokens: 1024,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    console.error("[whiteboard/ai] Groq vision error:", JSON.stringify(err));
-    return "";
+  const VISION_MODELS = [
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "llama-3.2-11b-vision-preview",
+    "llama-3.2-90b-vision-preview",
+  ];
+
+  for (const model of VISION_MODELS) {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        }],
+        temperature: 0.2,
+        max_tokens: 1024,
+      }),
+    });
+
+    if (res.ok) {
+      const d = await res.json();
+      const text = d.choices?.[0]?.message?.content ?? "";
+      if (text) return text;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      const msg = err?.error?.message ?? "";
+      console.error(`[whiteboard/ai] Groq vision (${model}) error:`, msg);
+      // If model not found, try next; otherwise surface the error
+      if (!msg.toLowerCase().includes("model") && !msg.toLowerCase().includes("not found") && !msg.toLowerCase().includes("decommissioned")) {
+        return `❌ Groq error: ${msg}`;
+      }
+    }
   }
-  const d = await res.json();
-  return d.choices?.[0]?.message?.content ?? "";
+  return "";
 }
 
 async function callGemini(key: string, parts: unknown[]): Promise<string> {
