@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@/styles/globals.css";
+import StoreProvider from "@/components/providers/StoreProvider";
 
 export const metadata: Metadata = {
   title: "DeepBoard — Smart Classroom Platform",
@@ -10,7 +11,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="grain">{children}</body>
+      <body className="grain">
+        <StoreProvider>{children}</StoreProvider>
+      </body>
     </html>
   );
 }

@@ -45,6 +45,10 @@ export const useAuthStore = create<AuthState>()(
         }
       },
     }),
-    { name: "sb-auth", partialize: (s) => ({ user: s.user }) }
+    {
+      name: "sb-auth",
+      partialize: (s) => ({ user: s.user }),
+      skipHydration: true, // prevents server/client snapshot mismatch (React error #438)
+    }
   )
 );
