@@ -59,7 +59,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
 
   const slides: { id: string; title: string; content: string }[] =
     Array.isArray(lesson.slides) && lesson.slides.length > 0
-      ? (lesson.slides as { id: string; title: string; content: string }[])
+      ? (lesson.slides as unknown as { id: string; title: string; content: string }[])
       : [{ id: "s1", title: "Introduction", content: "Start writing your lesson content here…" }];
 
   const slide = slides[currentSlide] ?? slides[0];
