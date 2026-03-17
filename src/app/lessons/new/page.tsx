@@ -6,17 +6,9 @@ import PageHeader from "@/components/ui/PageHeader";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { SUBJECTS, GRADES } from "@/lib/utils";
-import { lessonsApi } from "@/lib/api";
+import { lessonsApi, api } from "@/lib/api";
 import Link from "next/link";
 
-const MOCK_AI_SLIDES = [
-  { id: "s1", type: "text", title: "Introduction", content: "Photosynthesis is the process by which plants convert sunlight, water, and carbon dioxide into glucose and oxygen." },
-  { id: "s2", type: "text", title: "The Chloroplast",  content: "Photosynthesis occurs in the chloroplasts, specifically in the thylakoid membranes and stroma." },
-  { id: "s3", type: "text", title: "Light Reactions",  content: "In the light-dependent reactions, solar energy is converted into chemical energy (ATP and NADPH)." },
-  { id: "s4", type: "text", title: "Calvin Cycle",     content: "The Calvin cycle uses ATP and NADPH to convert CO₂ into glucose through a series of enzyme-driven reactions." },
-  { id: "s5", type: "text", title: "Oxygen Release",   content: "Water molecules are split during the light reactions, releasing oxygen as a byproduct." },
-  { id: "s6", type: "text", title: "Summary",          content: "6CO₂ + 6H₂O + light energy → C₆H₁₂O₆ + 6O₂" },
-];
 
 function NewLessonContent() {
   const searchParams = useSearchParams();
@@ -36,11 +28,24 @@ function NewLessonContent() {
   async function handleGenerate() {
     if (!aiTopic.trim()) return;
     setGenerating(true);
-    await new Promise((r) => setTimeout(r, 1800));
-    setTitle(`${aiTopic} — ${aiGrade}`);
-    setSlides(MOCK_AI_SLIDES);
-    setMode("manual");
-    setGenerating(false);
+    try {
+      const res = await api.post("/ai/generate-lesson", { topic: aiTopic, grade: aiGrade, num_slides: 6 });
+      const lesson = res.data.data;
+      setTitle(lesson.title ?? `${aiTopic} — ${aiGrade}`);
+      if (lesson.subject) setSubject(lesson.subject);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setSlides((lesson.slides ?? []).map((s: any, i: number) => ({
+        id: `s${Date.now()}-${i}`,
+        type: s.type ?? "text",
+        title: s.title ?? "Slide",
+        content: s.content ?? "",
+      })));
+      setMode("manual");
+    } catch {
+      // fallback: keep manual mode empty so user can type
+    } finally {
+      setGenerating(false);
+    }
   }
 
   async function handleSave() {

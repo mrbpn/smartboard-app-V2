@@ -154,10 +154,23 @@ export default function WhiteboardPage() {
   function clear() { setStrokes([]); setRedoStack([]); }
 
   async function runOCR() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     setOcrLoading(true);
-    await new Promise((r) => setTimeout(r, 1400));
-    setOcrText("Photosynthesis: 6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂\nThe chloroplast contains chlorophyll which absorbs sunlight.");
-    setOcrLoading(false);
+    try {
+      const image = canvas.toDataURL("image/png");
+      const res = await fetch("/api/whiteboard/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image }),
+      });
+      const data = await res.json();
+      setOcrText(data.data?.text ?? "No text detected.");
+    } catch {
+      setOcrText("OCR failed. Please try again.");
+    } finally {
+      setOcrLoading(false);
+    }
   }
 
   function downloadCanvas() {
