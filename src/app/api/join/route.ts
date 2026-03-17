@@ -18,7 +18,7 @@ export async function GET(req: Request) {
       .limit(1);
 
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-    if (!session.is_active) return NextResponse.json({ error: "Session has ended" }, { status: 410 });
+    if (session.status === "ended") return NextResponse.json({ error: "Session has ended" }, { status: 410 });
 
     const [quiz] = await db
       .select()
