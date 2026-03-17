@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000/api";
+// Use relative path so it works on localhost AND Vercel without any env var needed
+const BASE_URL = "/api";
 
 export const api = axios.create({
   baseURL: BASE_URL,
