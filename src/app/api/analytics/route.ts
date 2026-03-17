@@ -64,15 +64,28 @@ export async function GET() {
       activeStudents = new Set(studentData.map((r) => r.alias)).size;
     }
 
-    // Weekly score trend (last 6 data points, mocked for now)
-    const weeklyTrend = [
-      { week: "W1", score: 65 },
-      { week: "W2", score: 70 },
-      { week: "W3", score: 72 },
-      { week: "W4", score: 68 },
-      { week: "W5", score: avgScore || 78 },
-      { week: "W6", score: avgScore || 82 },
-    ];
+    // Weekly score trend: last 6 quiz sessions for this teacher
+    const allSessionIds = teacherQuizIds.length
+      ? await db
+          .select({ id: quiz_sessions.id, started_at: quiz_sessions.started_at })
+          .from(quiz_sessions)
+          .where(eq(quiz_sessions.quiz_id, teacherQuizIds[0].id))
+          .limit(6)
+      : [];
+
+    const weeklyTrend = await Promise.all(
+      allSessionIds.map(async (sess, i) => {
+        const scoreData = await db
+          .select({ avg: avg(responses.is_correct) })
+          .from(responses)
+          .where(eq(responses.session_id, sess.id));
+        const sessScore = Math.round(Number(scoreData[0]?.avg ?? 0) * 100);
+        const label = sess.started_at
+          ? new Date(sess.started_at).toLocaleDateString("en", { month: "short", day: "numeric" })
+          : `S${i + 1}`;
+        return { week: label, score: sessScore };
+      })
+    );
 
     return NextResponse.json({
       data: {

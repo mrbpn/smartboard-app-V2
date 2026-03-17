@@ -22,11 +22,11 @@ function LiveSessionModal({ quiz, onClose }: { quiz: Quiz; onClose: () => void }
     setLaunching(true);
     try {
       const res = await quizzesApi.startSession(quiz.id, hybrid);
-      setJoinCode(res.data.data?.join_code ?? "XK7F2A");
+      setJoinCode(res.data.data?.join_code ?? "");
       setLaunched(true);
     } catch {
-      setJoinCode("XK7F2A");
-      setLaunched(true);
+      setJoinCode("");
+      setLaunched(false);
     } finally {
       setLaunching(false);
     }

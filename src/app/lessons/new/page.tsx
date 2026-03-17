@@ -23,7 +23,7 @@ function NewLessonContent() {
 
   const [title, setTitle]     = useState("");
   const [subject, setSubject] = useState("Biology");
-  const [slides, setSlides]   = useState<typeof MOCK_AI_SLIDES>([]);
+  const [slides, setSlides]   = useState<{ id: string; type: string; title: string; content: string }[]>([]);
 
   async function handleGenerate() {
     if (!aiTopic.trim()) return;

@@ -1,25 +1,36 @@
 "use client";
 import { useState, useEffect } from "react";
-import { CheckCircle2, XCircle, Clock, Users } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Users, Loader2 } from "lucide-react";
 import Button from "@/components/ui/Button";
 
-const MOCK_QUESTIONS = [
-  { id: "q1", body: "What is the main pigment responsible for photosynthesis?", options: ["Chlorophyll", "Carotene", "Melanin", "Keratin"], correct: "Chlorophyll" },
-  { id: "q2", body: "Photosynthesis occurs in the mitochondria.", options: ["True", "False"], correct: "False" },
-  { id: "q3", body: "What gas is released as a byproduct of photosynthesis?", options: ["Carbon dioxide", "Nitrogen", "Oxygen", "Hydrogen"], correct: "Oxygen" },
-];
+interface Question {
+  id: string;
+  body: string;
+  type: string;
+  options: string[];
+  correct: string;
+}
 
-type Phase = "join" | "waiting" | "question" | "result" | "finished";
+interface SessionData {
+  session_id: string;
+  quiz_title: string;
+  time_limit_sec: number;
+  questions: Question[];
+}
+
+type Phase = "join" | "loading" | "waiting" | "question" | "result" | "finished" | "error";
 
 export default function JoinPage({ params }: { params: { code: string } }) {
   const { code } = params;
-  const [phase, setPhase]         = useState<Phase>("join");
-  const [alias, setAlias]         = useState("");
-  const [qIndex, setQIndex]       = useState(0);
-  const [selected, setSelected]   = useState<string | null>(null);
-  const [timer, setTimer]         = useState(30);
-  const [score, setScore]         = useState(0);
-  const [answers, setAnswers]     = useState<Record<string, string>>({});
+  const [phase, setPhase]       = useState<Phase>("join");
+  const [alias, setAlias]       = useState("");
+  const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [qIndex, setQIndex]     = useState(0);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [timer, setTimer]       = useState(30);
+  const [score, setScore]       = useState(0);
+  const [answers, setAnswers]   = useState<Record<string, string>>({});
+  const [errorMsg, setErrorMsg] = useState("");
 
   // Timer countdown during question
   useEffect(() => {
@@ -27,35 +38,71 @@ export default function JoinPage({ params }: { params: { code: string } }) {
     if (timer <= 0) { handleNext(); return; }
     const id = setTimeout(() => setTimer((t) => t - 1), 1000);
     return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, timer]);
 
-  function handleJoin() {
+  async function handleJoin() {
     if (!alias.trim()) return;
-    setPhase("waiting");
-    setTimeout(() => { setPhase("question"); setTimer(30); }, 1500);
+    setPhase("loading");
+    try {
+      const res = await fetch(`/api/join?code=${code.toUpperCase()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error ?? "Session not found or has ended.");
+        setPhase("error");
+        return;
+      }
+      setSessionData(data.data);
+      setPhase("waiting");
+      setTimeout(() => {
+        setPhase("question");
+        setTimer(data.data.time_limit_sec ?? 30);
+      }, 1500);
+    } catch {
+      setErrorMsg("Could not connect. Please check your internet and try again.");
+      setPhase("error");
+    }
   }
 
-  function handleAnswer(opt: string) {
-    if (selected) return;
+  async function handleAnswer(opt: string) {
+    if (selected || !sessionData) return;
     setSelected(opt);
-    const q = MOCK_QUESTIONS[qIndex];
-    if (opt === q.correct) setScore((s) => s + 1);
+    const q = sessionData.questions[qIndex];
+    const correct = opt === q.correct;
+    if (correct) setScore((s) => s + 1);
     setAnswers((a) => ({ ...a, [q.id]: opt }));
+
+    // Submit answer to server
+    fetch("/api/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionData.session_id,
+        question_id: q.id,
+        student_alias: alias,
+        answer: opt,
+        is_correct: correct,
+      }),
+    }).catch(() => {});
+
     setTimeout(() => handleNext(), 1200);
   }
 
   function handleNext() {
-    if (qIndex + 1 >= MOCK_QUESTIONS.length) {
+    if (!sessionData) return;
+    if (qIndex + 1 >= sessionData.questions.length) {
       setPhase("finished");
     } else {
       setQIndex((i) => i + 1);
       setSelected(null);
-      setTimer(30);
+      setTimer(sessionData.time_limit_sec ?? 30);
+      setPhase("question");
     }
   }
 
-  const q = MOCK_QUESTIONS[qIndex];
-  const pct = Math.round((score / MOCK_QUESTIONS.length) * 100);
+  const questions = sessionData?.questions ?? [];
+  const q = questions[qIndex];
+  const pct = questions.length ? Math.round((score / questions.length) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-ink-900 flex items-center justify-center p-4">
@@ -67,7 +114,7 @@ export default function JoinPage({ params }: { params: { code: string } }) {
               <Users size={24} className="text-sage-600" />
             </div>
             <h1 className="font-display text-2xl text-ink-800 mb-1">Join Quiz</h1>
-            <p className="text-ink-400 text-sm mb-6">Code: <span className="font-mono font-medium text-ink-700">{code}</span></p>
+            <p className="text-ink-400 text-sm mb-6">Code: <span className="font-mono font-medium text-ink-700">{code.toUpperCase()}</span></p>
             <input
               value={alias}
               onChange={(e) => setAlias(e.target.value)}
@@ -80,19 +127,34 @@ export default function JoinPage({ params }: { params: { code: string } }) {
           </div>
         )}
 
+        {phase === "loading" && (
+          <div className="text-center animate-fade-up">
+            <Loader2 size={32} className="animate-spin text-sage-400 mx-auto mb-4" />
+            <p className="text-chalk text-lg font-display">Connecting…</p>
+          </div>
+        )}
+
+        {phase === "error" && (
+          <div className="bg-white rounded-2xl p-8 text-center animate-fade-up">
+            <p className="text-coral-500 font-medium mb-4">{errorMsg}</p>
+            <Button onClick={() => setPhase("join")} variant="secondary">Try again</Button>
+          </div>
+        )}
+
         {phase === "waiting" && (
           <div className="text-center animate-fade-up">
             <div className="w-16 h-16 rounded-full border-4 border-sage-500/30 border-t-sage-500 animate-spin mx-auto mb-4" />
-            <p className="text-chalk text-lg font-display">Waiting for teacher to start…</p>
+            <p className="text-chalk text-lg font-display">
+              {sessionData?.quiz_title ?? "Quiz"}
+            </p>
             <p className="text-ink-400 text-sm mt-1">Hi, {alias}! Get ready.</p>
           </div>
         )}
 
-        {phase === "question" && (
+        {phase === "question" && q && (
           <div className="animate-fade-up">
-            {/* Progress */}
             <div className="flex items-center justify-between mb-4">
-              <span className="text-ink-400 text-sm">{qIndex + 1} / {MOCK_QUESTIONS.length}</span>
+              <span className="text-ink-400 text-sm">{qIndex + 1} / {questions.length}</span>
               <div className={`flex items-center gap-1.5 text-sm font-mono ${timer <= 10 ? "text-coral-400" : "text-chalk"}`}>
                 <Clock size={14} />
                 {timer}s
@@ -140,10 +202,10 @@ export default function JoinPage({ params }: { params: { code: string } }) {
             <p className="text-ink-500 text-sm mb-6">{alias}</p>
             <div className="bg-ink-50 rounded-xl p-5 mb-4">
               <p className="font-display text-5xl text-ink-800 mb-1">{pct}%</p>
-              <p className="text-ink-400 text-sm">{score} of {MOCK_QUESTIONS.length} correct</p>
+              <p className="text-ink-400 text-sm">{score} of {questions.length} correct</p>
             </div>
             <div className="space-y-2 text-left">
-              {MOCK_QUESTIONS.map((mq) => {
+              {questions.map((mq) => {
                 const ans = answers[mq.id];
                 const ok  = ans === mq.correct;
                 return (
@@ -152,7 +214,7 @@ export default function JoinPage({ params }: { params: { code: string } }) {
                     <div>
                       <p className="text-ink-700 text-xs line-clamp-1">{mq.body}</p>
                       <p className={`text-[11px] mt-0.5 ${ok ? "text-sage-600" : "text-coral-500"}`}>
-                        {ok ? "Correct" : `Your answer: ${ans} · Correct: ${mq.correct}`}
+                        {ok ? "Correct" : `Your answer: ${ans ?? "—"} · Correct: ${mq.correct}`}
                       </p>
                     </div>
                   </div>

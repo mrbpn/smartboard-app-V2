@@ -1,12 +1,13 @@
 "use client";
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, Plus, Trash2, Save, Sparkles } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Save, Sparkles, Loader2 } from "lucide-react";
 import Link from "next/link";
 import PageHeader from "@/components/ui/PageHeader";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import { MOCK_LESSONS } from "@/lib/mock";
+import { api, quizzesApi, lessonsApi } from "@/lib/api";
+import type { Lesson } from "@/types";
 
 type QType = "mcq" | "truefalse" | "open";
 interface Q { id: string; body: string; type: QType; options: string[]; correct: string; }
@@ -18,24 +19,50 @@ function NewQuizContent() {
   const params = useSearchParams();
   const lessonId = params.get("lesson") ?? "";
 
-  const [title, setTitle]       = useState("");
-  const [lesson, setLesson]     = useState(lessonId);
+  const [title, setTitle]         = useState("");
+  const [lesson, setLesson]       = useState(lessonId);
   const [timeLimit, setTimeLimit] = useState(30);
   const [questions, setQuestions] = useState<Q[]>([EMPTY_Q()]);
-  const [saving, setSaving]     = useState(false);
+  const [saving, setSaving]       = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [lessons, setLessons]     = useState<Lesson[]>([]);
+  const [error, setError]         = useState("");
+
+  // Load real lessons from DB
+  useEffect(() => {
+    lessonsApi.list()
+      .then((res) => setLessons(res.data.data ?? []))
+      .catch(() => setLessons([]));
+  }, []);
 
   async function handleGenerate() {
     if (!lesson) return;
     setGenerating(true);
-    await new Promise((r) => setTimeout(r, 1600));
-    setTitle("AI-Generated Quiz");
-    setQuestions([
-      { id: "q1", body: "What is the primary purpose of photosynthesis?", type: "mcq", options: ["Produce oxygen only", "Convert sunlight to glucose", "Absorb water from soil", "Release carbon dioxide"], correct: "Convert sunlight to glucose" },
-      { id: "q2", body: "Chlorophyll is found in the chloroplast.", type: "truefalse", options: ["True", "False"], correct: "True" },
-      { id: "q3", body: "What is the chemical formula for glucose?", type: "mcq", options: ["CO₂", "H₂O", "C₆H₁₂O₆", "O₂"], correct: "C₆H₁₂O₆" },
-    ]);
-    setGenerating(false);
+    setError("");
+    try {
+      const res = await api.post("/ai/generate-quiz", {
+        lesson_id: lesson,
+        num_questions: 5,
+        type: "mcq",
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const generated = (res.data.data ?? []).map((q: any, i: number) => ({
+        id: `q-${Date.now()}-${i}`,
+        body: q.body ?? "",
+        type: (q.type ?? "mcq") as QType,
+        options: q.options ?? ["", "", "", ""],
+        correct: q.correct_answer ?? "",
+      }));
+      if (generated.length) {
+        setQuestions(generated);
+        const linked = lessons.find((l) => l.id === lesson);
+        if (linked && !title) setTitle(`${linked.title} — Quiz`);
+      }
+    } catch {
+      setError("AI generation failed. Please try again or add questions manually.");
+    } finally {
+      setGenerating(false);
+    }
   }
 
   function addQ() { setQuestions((q) => [...q, EMPTY_Q()]); }
@@ -48,9 +75,27 @@ function NewQuizContent() {
   }
 
   async function handleSave() {
+    if (!title.trim()) { setError("Please enter a quiz title."); return; }
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 800));
-    router.push("/quizzes");
+    setError("");
+    try {
+      await quizzesApi.create({
+        title,
+        lesson_id: lesson || undefined,
+        time_limit_sec: timeLimit,
+        questions: questions.map((q, i) => ({
+          body: q.body,
+          type: q.type,
+          options: q.options.filter(Boolean),
+          correct_answer: q.correct,
+          order_index: i,
+        })),
+      });
+      router.push("/quizzes");
+    } catch {
+      setError("Failed to save quiz. Please try again.");
+      setSaving(false);
+    }
   }
 
   return (
@@ -63,6 +108,8 @@ function NewQuizContent() {
         <Button icon={<Save size={14} />} loading={saving} onClick={handleSave}>Save quiz</Button>
       </div>
 
+      {error && <p className="text-coral-500 text-sm mb-4 bg-coral-50 border border-coral-200 rounded-lg px-4 py-2">{error}</p>}
+
       {/* Meta */}
       <div className="bg-white border border-ink-100 rounded-xl p-5 mb-5 space-y-4">
         <h3 className="font-display text-lg text-ink-800">Quiz details</h3>
@@ -73,7 +120,7 @@ function NewQuizContent() {
             <select value={lesson} onChange={(e) => setLesson(e.target.value)}
               className="w-full bg-white border border-ink-200 rounded-lg py-2.5 px-3 text-sm text-ink-800 focus:outline-none focus:ring-2 focus:ring-ink-300">
               <option value="">— None —</option>
-              {MOCK_LESSONS.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
+              {lessons.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
             </select>
           </div>
         </div>
@@ -85,7 +132,8 @@ function NewQuizContent() {
           </div>
           {lesson && (
             <div className="flex-1 pt-6">
-              <Button variant="secondary" icon={<Sparkles size={13} className="text-amber-500" />} loading={generating} onClick={handleGenerate} className="w-full justify-center">
+              <Button variant="secondary" icon={generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} className="text-amber-500" />}
+                loading={generating} onClick={handleGenerate} className="w-full justify-center">
                 AI-generate questions
               </Button>
             </div>

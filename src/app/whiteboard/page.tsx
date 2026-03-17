@@ -29,7 +29,7 @@ export default function WhiteboardPage() {
   const [ocrText, setOcrText]     = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
   const [zoom, setZoom]           = useState(100);
-  const [participants]            = useState(["You", "Student A", "Student B"]);
+  const [participants]            = useState(["You"]);
 
   // Redraw canvas whenever strokes change
   useEffect(() => {
