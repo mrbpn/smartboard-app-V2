@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store";
-import { MOCK_USER } from "@/lib/mock";
 
 const NAV = [
   { href: "/dashboard",  label: "Dashboard",  icon: LayoutDashboard },
@@ -20,8 +19,7 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { logout } = useAuthStore();
-  const user = MOCK_USER;
+  const { user, logout } = useAuthStore();
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-56 bg-ink-900 flex flex-col z-40 border-r border-ink-700">
@@ -65,11 +63,11 @@ export default function Sidebar() {
       <div className="px-3 py-4 border-t border-ink-700">
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
           <div className="w-7 h-7 rounded-full bg-sage-400 flex items-center justify-center flex-shrink-0">
-            <span className="text-ink-900 text-xs font-medium">{getInitials(user.name)}</span>
+            <span className="text-ink-900 text-xs font-medium">{getInitials(user?.name ?? "")}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-chalk text-xs font-medium truncate">{user.name}</p>
-            <p className="text-ink-400 text-[10px] truncate">{user.email}</p>
+            <p className="text-chalk text-xs font-medium truncate">{user?.name ?? "—"}</p>
+            <p className="text-ink-400 text-[10px] truncate">{user?.email ?? ""}</p>
           </div>
         </div>
         <button

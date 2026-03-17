@@ -1,26 +1,76 @@
 "use client";
-import { useState, use } from "react";
+import { useState, use, useEffect } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Sparkles, Plus, BookOpen, HelpCircle, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, Plus, HelpCircle, Save, Loader2 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
-import { MOCK_LESSONS } from "@/lib/mock";
+import { lessonsApi } from "@/lib/api";
 import { subjectColor, formatDate } from "@/lib/utils";
+import type { Lesson } from "@/types";
 
 export default function LessonDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const lesson = MOCK_LESSONS.find((l) => l.id === id) ?? MOCK_LESSONS[0];
-
-  const slides = [
-    { id: "s1", title: "Introduction",   content: "Photosynthesis is the process by which plants convert sunlight, water, and CO₂ into glucose and oxygen. It is the foundation of most food chains on Earth." },
-    { id: "s2", title: "The Chloroplast",content: "Photosynthesis takes place in the chloroplasts — organelles containing the green pigment chlorophyll, which captures solar energy." },
-    { id: "s3", title: "Light Reactions", content: "Solar energy splits water molecules (photolysis), generating ATP, NADPH, and releasing O₂ as a byproduct. This happens in the thylakoid membranes." },
-    { id: "s4", title: "Calvin Cycle",   content: "CO₂ is 'fixed' into organic molecules using ATP and NADPH from the light reactions. This happens in the stroma of the chloroplast." },
-    { id: "s5", title: "Summary",        content: "6CO₂ + 6H₂O + light energy → C₆H₁₂O₆ + 6O₂\n\nThe energy stored in glucose powers nearly all life on Earth." },
-  ];
-
+  const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [currentSlide, setCurrentSlide] = useState(0);
-  const slide = slides[currentSlide];
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    lessonsApi.get(id)
+      .then((res) => setLesson(res.data.data))
+      .catch(() => setError("Could not load lesson."))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  async function saveSlide() {
+    if (!lesson) return;
+    setSaving(true);
+    try {
+      await lessonsApi.update(id, { slides: lesson.slides });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // silent
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-64">
+        <Loader2 size={24} className="animate-spin text-ink-400" />
+      </div>
+    );
+  }
+
+  if (error || !lesson) {
+    return (
+      <div className="p-8">
+        <Link href="/lessons" className="text-ink-400 hover:text-ink-700 flex items-center gap-1 mb-4 text-sm">
+          <ChevronLeft size={14} /> Back to lessons
+        </Link>
+        <p className="text-coral-500">{error || "Lesson not found."}</p>
+      </div>
+    );
+  }
+
+  const slides: { id: string; title: string; content: string }[] =
+    Array.isArray(lesson.slides) && lesson.slides.length > 0
+      ? (lesson.slides as { id: string; title: string; content: string }[])
+      : [{ id: "s1", title: "Introduction", content: "Start writing your lesson content here…" }];
+
+  const slide = slides[currentSlide] ?? slides[0];
+
+  function updateSlideField(field: "title" | "content", value: string) {
+    if (!lesson) return;
+    const updated = slides.map((s, i) =>
+      i === currentSlide ? { ...s, [field]: value } : s
+    );
+    setLesson({ ...lesson, slides: updated });
+  }
 
   return (
     <div className="p-8">
@@ -42,7 +92,10 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
           <Link href={`/quizzes/new?lesson=${lesson.id}`}>
             <Button variant="secondary" icon={<HelpCircle size={14} />}>Create quiz</Button>
           </Link>
-          <Button icon={<Save size={14} />}>Save changes</Button>
+          <Button icon={<Save size={14} />} loading={saving} onClick={saveSlide}
+            className={saved ? "bg-sage-500 hover:bg-sage-500 border-0" : ""}>
+            {saved ? "Saved!" : "Save changes"}
+          </Button>
         </div>
       </div>
 
@@ -61,11 +114,21 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
                     : "bg-white border border-ink-100 text-ink-700 hover:border-ink-300"
                 }`}
               >
-                <span className={`text-[10px] font-mono flex-shrink-0 ${currentSlide === i ? "text-ink-400" : "text-ink-300"}`}>{String(i + 1).padStart(2, "0")}</span>
+                <span className={`text-[10px] font-mono flex-shrink-0 ${currentSlide === i ? "text-ink-400" : "text-ink-300"}`}>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
                 <span className="text-sm truncate">{s.title}</span>
               </button>
             ))}
-            <button className="w-full text-left px-3 py-3 rounded-xl border-2 border-dashed border-ink-200 text-ink-400 hover:border-ink-400 hover:text-ink-600 transition-all flex items-center gap-2 text-sm">
+            <button
+              onClick={() => {
+                if (!lesson) return;
+                const newSlide = { id: `s${Date.now()}`, title: "New Slide", content: "" };
+                setLesson({ ...lesson, slides: [...slides, newSlide] });
+                setCurrentSlide(slides.length);
+              }}
+              className="w-full text-left px-3 py-3 rounded-xl border-2 border-dashed border-ink-200 text-ink-400 hover:border-ink-400 hover:text-ink-600 transition-all flex items-center gap-2 text-sm"
+            >
               <Plus size={13} /> Add slide
             </button>
           </div>
@@ -90,12 +153,14 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
             {/* Edit area */}
             <div className="p-5 space-y-3">
               <input
-                defaultValue={slide.title}
+                value={slide.title}
+                onChange={(e) => updateSlideField("title", e.target.value)}
                 className="w-full font-display text-xl text-ink-800 bg-transparent border-b border-transparent focus:border-ink-300 focus:outline-none pb-1 transition-all"
                 placeholder="Slide title"
               />
               <textarea
-                defaultValue={slide.content}
+                value={slide.content}
+                onChange={(e) => updateSlideField("content", e.target.value)}
                 rows={5}
                 className="w-full text-sm text-ink-600 bg-ink-50 rounded-xl p-4 border border-ink-100 focus:outline-none focus:ring-2 focus:ring-ink-200 resize-none"
                 placeholder="Slide content…"

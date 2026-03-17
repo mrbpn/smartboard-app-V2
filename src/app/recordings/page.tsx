@@ -1,12 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Video, Play, Lock, Globe, Clock, Loader2, Download, Trash2 } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
-import { MOCK_RECORDINGS, MOCK_LESSONS } from "@/lib/mock";
+import { recordingsApi, api } from "@/lib/api";
 import { formatDate, formatDuration } from "@/lib/utils";
 import type { Recording } from "@/types";
 
@@ -16,9 +16,8 @@ const STATUS_MAP = {
   recording:  { label: "Recording",  variant: "danger"   as const },
 };
 
-function RecordingCard({ rec, onPlay }: { rec: Recording; onPlay: () => void }) {
-  const lesson  = MOCK_LESSONS.find((l) => l.id === rec.lesson_id);
-  const status  = STATUS_MAP[rec.status];
+function RecordingCard({ rec, onPlay, onDelete }: { rec: Recording; onPlay: () => void; onDelete: () => void }) {
+  const status = STATUS_MAP[rec.status] ?? STATUS_MAP.ready;
 
   return (
     <div className="bg-white border border-ink-100 rounded-xl overflow-hidden card-lift group">
@@ -43,15 +42,11 @@ function RecordingCard({ rec, onPlay }: { rec: Recording; onPlay: () => void }) 
             <span className="text-coral-400 text-xs font-medium">Recording</span>
           </div>
         )}
-
-        {/* Duration badge */}
         {rec.duration_sec && (
           <div className="absolute bottom-2 right-2 bg-ink-900/70 text-chalk text-[10px] px-1.5 py-0.5 rounded font-mono">
             {formatDuration(rec.duration_sec)}
           </div>
         )}
-
-        {/* Visibility */}
         <div className="absolute top-2 left-2">
           {rec.is_public
             ? <span className="flex items-center gap-1 text-[10px] bg-sage-900/60 text-sage-300 px-2 py-0.5 rounded-full"><Globe size={9} />Public</span>
@@ -62,9 +57,7 @@ function RecordingCard({ rec, onPlay }: { rec: Recording; onPlay: () => void }) 
 
       <div className="p-4">
         <h3 className="font-medium text-ink-800 text-sm mb-0.5 truncate">{rec.title}</h3>
-        {lesson && <p className="text-xs text-ink-400 mb-2 truncate">{lesson.title}</p>}
-
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-1.5 text-xs text-ink-400">
             <Clock size={11} />
             {formatDate(rec.recorded_at)}
@@ -79,7 +72,7 @@ function RecordingCard({ rec, onPlay }: { rec: Recording; onPlay: () => void }) 
               <Button size="sm" variant="ghost" icon={<Download size={11} />} />
             </>
           )}
-          <Button size="sm" variant="ghost" icon={<Trash2 size={11} />} className="text-coral-400 hover:bg-coral-50" />
+          <Button size="sm" variant="ghost" icon={<Trash2 size={11} />} onClick={onDelete} className="text-coral-400 hover:bg-coral-50" />
         </div>
       </div>
     </div>
@@ -87,16 +80,42 @@ function RecordingCard({ rec, onPlay }: { rec: Recording; onPlay: () => void }) 
 }
 
 export default function RecordingsPage() {
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [loading, setLoading] = useState(true);
   const [playTarget, setPlayTarget] = useState<Recording | null>(null);
+
+  useEffect(() => {
+    recordingsApi.list()
+      .then((res) => setRecordings(res.data.data ?? []))
+      .catch(() => setRecordings([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function deleteRecording(id: string) {
+    try {
+      await api.delete(`/recordings/${id}`);
+      setRecordings((prev) => prev.filter((r) => r.id !== id));
+      if (playTarget?.id === id) setPlayTarget(null);
+    } catch { /* silent */ }
+  }
+
+  async function toggleVisibility(rec: Recording) {
+    try {
+      await api.patch(`/recordings/${rec.id}`, { is_public: !rec.is_public });
+      setRecordings((prev) => prev.map((r) => r.id === rec.id ? { ...r, is_public: !r.is_public } : r));
+      if (playTarget?.id === rec.id) setPlayTarget({ ...rec, is_public: !rec.is_public });
+    } catch { /* silent */ }
+  }
 
   return (
     <div className="p-8">
-      <PageHeader
-        title="Recordings"
-        subtitle="Your recorded class sessions"
-      />
+      <PageHeader title="Recordings" subtitle="Your recorded class sessions" />
 
-      {MOCK_RECORDINGS.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center min-h-48">
+          <Loader2 size={24} className="animate-spin text-ink-400" />
+        </div>
+      ) : recordings.length === 0 ? (
         <EmptyState
           icon={<Video size={22} />}
           title="No recordings yet"
@@ -104,8 +123,13 @@ export default function RecordingsPage() {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger">
-          {MOCK_RECORDINGS.map((rec) => (
-            <RecordingCard key={rec.id} rec={rec} onPlay={() => setPlayTarget(rec)} />
+          {recordings.map((rec) => (
+            <RecordingCard
+              key={rec.id}
+              rec={rec}
+              onPlay={() => setPlayTarget(rec)}
+              onDelete={() => deleteRecording(rec.id)}
+            />
           ))}
         </div>
       )}
@@ -136,6 +160,7 @@ export default function RecordingsPage() {
               variant="secondary"
               size="sm"
               icon={playTarget?.is_public ? <Lock size={13} /> : <Globe size={13} />}
+              onClick={() => playTarget && toggleVisibility(playTarget)}
             >
               {playTarget?.is_public ? "Make private" : "Share publicly"}
             </Button>
