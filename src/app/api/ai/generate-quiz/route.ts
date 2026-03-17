@@ -13,7 +13,6 @@ export async function POST(req: Request) {
     const { lesson_id, num_questions = 5, type = "mcq" } = await req.json();
     if (!lesson_id) return NextResponse.json({ error: "lesson_id is required" }, { status: 400 });
 
-    // Fetch lesson content to build context
     const [lesson] = await db.select().from(lessons).where(eq(lessons.id, lesson_id)).limit(1);
     const lessonSlides = await db.select().from(slides).where(eq(slides.lesson_id, lesson_id));
 
@@ -24,9 +23,10 @@ export async function POST(req: Request) {
       })
       .join("\n");
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const groqKey   = process.env.GROQ_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
 
-    if (!apiKey) {
+    if (!groqKey && !geminiKey) {
       return NextResponse.json({ data: buildMockQuestions(lesson?.title ?? "the lesson", num_questions, type) });
     }
 
@@ -49,24 +49,47 @@ Return ONLY valid JSON (no markdown, no backticks):
 For truefalse, options must be ["True", "False"].
 For open, options can be empty [].`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
-        }),
-      }
-    );
+    let rawText = "";
 
-    if (!response.ok) {
+    if (groqKey) {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${groqKey}` },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.7,
+          max_tokens: 1024,
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        rawText = d.choices?.[0]?.message?.content ?? "";
+      }
+    }
+
+    if (!rawText && geminiKey) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+          }),
+        }
+      );
+      if (res.ok) {
+        const d = await res.json();
+        rawText = d.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      }
+    }
+
+    if (!rawText) {
       return NextResponse.json({ data: buildMockQuestions(lesson?.title ?? "the lesson", num_questions, type) });
     }
 
-    const geminiData = await response.json();
-    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     const jsonStr = rawText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const parsed = JSON.parse(jsonStr);
     return NextResponse.json({ data: parsed.questions });
