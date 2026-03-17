@@ -1,5 +1,5 @@
 "use client";
-import { useState, use, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Sparkles, Plus, HelpCircle, Save, Loader2 } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -8,8 +8,8 @@ import { lessonsApi } from "@/lib/api";
 import { subjectColor, formatDate } from "@/lib/utils";
 import type { Lesson, Slide } from "@/types";
 
-export default function LessonDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function LessonDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

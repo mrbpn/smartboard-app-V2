@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle2, XCircle, Clock, Users } from "lucide-react";
 import Button from "@/components/ui/Button";
 
@@ -11,8 +11,8 @@ const MOCK_QUESTIONS = [
 
 type Phase = "join" | "waiting" | "question" | "result" | "finished";
 
-export default function JoinPage({ params }: { params: Promise<{ code: string }> }) {
-  const { code } = use(params);
+export default function JoinPage({ params }: { params: { code: string } }) {
+  const { code } = params;
   const [phase, setPhase]         = useState<Phase>("join");
   const [alias, setAlias]         = useState("");
   const [qIndex, setQIndex]       = useState(0);
