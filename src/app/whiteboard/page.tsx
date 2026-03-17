@@ -311,11 +311,11 @@ export default function WhiteboardPage() {
                 <div className="flex gap-1.5">
                   <input
                     value={question} onChange={(e)=>setQuestion(e.target.value)}
-                    onKeyDown={(e)=>e.key==="Enter"&&question.trim()&&callAI("ask",{useImage:true,q:question})}
+                    onKeyDown={(e)=>e.key==="Enter"&&question.trim()&&callAI("ask",{q:question})}
                     placeholder="Ask a question…"
                     className="flex-1 bg-ink-700 border border-ink-600 rounded-lg px-2.5 py-2 text-xs text-ink-200 placeholder:text-ink-500 focus:outline-none focus:ring-1 focus:ring-sage-400"
                   />
-                  <button disabled={aiLoading||!question.trim()} onClick={()=>callAI("ask",{useImage:true,q:question})}
+                  <button disabled={aiLoading||!question.trim()} onClick={()=>callAI("ask",{q:question})}
                     className="px-2.5 py-2 rounded-lg bg-sage-600 hover:bg-sage-500 text-white text-xs font-medium transition-all disabled:opacity-40">
                     <Send size={12}/>
                   </button>
