@@ -139,7 +139,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ data: { result: "Please provide image or text content." } });
     }
 
-    return NextResponse.json({ data: { result: result || "No response from AI." } });
+    if (!result) {
+      const hint = !groqKey
+        ? "⚠️ AI provider not responding. Add GROQ_API_KEY (free at console.groq.com) in Vercel → Settings → Environment Variables, then redeploy."
+        : "⚠️ AI returned an empty response. Please try again.";
+      return NextResponse.json({ data: { result: hint } });
+    }
+
+    return NextResponse.json({ data: { result } });
   } catch (e) {
     console.error("[POST /whiteboard/ai]", e);
     return NextResponse.json({ data: { result: "Something went wrong. Please try again." } });

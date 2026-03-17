@@ -71,7 +71,14 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ data: { text: text || "No text detected." } });
+    if (!text) {
+      const hint = !groqKey
+        ? "⚠️ OCR unavailable. Add GROQ_API_KEY (free at console.groq.com) in Vercel → Settings → Environment Variables, then redeploy."
+        : "No text detected.";
+      return NextResponse.json({ data: { text: hint } });
+    }
+
+    return NextResponse.json({ data: { text } });
   } catch (e) {
     console.error("[POST /whiteboard/ocr]", e);
     return NextResponse.json({ data: { text: "OCR failed. Please try again." } });
