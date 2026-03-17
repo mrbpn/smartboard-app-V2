@@ -6,7 +6,7 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import { lessonsApi } from "@/lib/api";
 import { subjectColor, formatDate } from "@/lib/utils";
-import type { Lesson } from "@/types";
+import type { Lesson, Slide } from "@/types";
 
 export default function LessonDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -69,7 +69,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     const updated = slides.map((s, i) =>
       i === currentSlide ? { ...s, [field]: value } : s
     );
-    setLesson({ ...lesson, slides: updated });
+    setLesson({ ...lesson, slides: updated as unknown as Slide[] });
   }
 
   return (
@@ -124,7 +124,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
               onClick={() => {
                 if (!lesson) return;
                 const newSlide = { id: `s${Date.now()}`, title: "New Slide", content: "" };
-                setLesson({ ...lesson, slides: [...slides, newSlide] });
+                setLesson({ ...lesson, slides: [...slides, newSlide] as unknown as Slide[] });
                 setCurrentSlide(slides.length);
               }}
               className="w-full text-left px-3 py-3 rounded-xl border-2 border-dashed border-ink-200 text-ink-400 hover:border-ink-400 hover:text-ink-600 transition-all flex items-center gap-2 text-sm"
