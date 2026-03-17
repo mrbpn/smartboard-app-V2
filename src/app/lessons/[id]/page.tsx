@@ -57,9 +57,15 @@ export default function LessonDetailPage({ params }: { params: { id: string } })
     );
   }
 
+  // DB stores slide content as a JSON object { title, text }.
+  // Map to a flat { id, title, content } shape for the editor.
   const slides: { id: string; title: string; content: string }[] =
     Array.isArray(lesson.slides) && lesson.slides.length > 0
-      ? (lesson.slides as unknown as { id: string; title: string; content: string }[])
+      ? lesson.slides.map((s) => ({
+          id: s.id,
+          title: (s.content as Record<string, string>)?.title ?? "Untitled",
+          content: (s.content as Record<string, string>)?.text ?? "",
+        }))
       : [{ id: "s1", title: "Introduction", content: "Start writing your lesson content here…" }];
 
   const slide = slides[currentSlide] ?? slides[0];
@@ -69,7 +75,12 @@ export default function LessonDetailPage({ params }: { params: { id: string } })
     const updated = slides.map((s, i) =>
       i === currentSlide ? { ...s, [field]: value } : s
     );
-    setLesson({ ...lesson, slides: updated as unknown as Slide[] });
+    // Map back to DB Slide shape: content is { title, text }
+    const dbSlides = updated.map((s) => ({
+      ...lesson.slides.find((db) => db.id === s.id),
+      content: { title: s.title, text: s.content },
+    }));
+    setLesson({ ...lesson, slides: dbSlides as unknown as Slide[] });
   }
 
   return (
@@ -123,8 +134,8 @@ export default function LessonDetailPage({ params }: { params: { id: string } })
             <button
               onClick={() => {
                 if (!lesson) return;
-                const newSlide = { id: `s${Date.now()}`, title: "New Slide", content: "" };
-                setLesson({ ...lesson, slides: [...slides, newSlide] as unknown as Slide[] });
+                const newSlide = { id: `s${Date.now()}`, content: { title: "New Slide", text: "" } };
+                setLesson({ ...lesson, slides: [...lesson.slides, newSlide] as unknown as Slide[] });
                 setCurrentSlide(slides.length);
               }}
               className="w-full text-left px-3 py-3 rounded-xl border-2 border-dashed border-ink-200 text-ink-400 hover:border-ink-400 hover:text-ink-600 transition-all flex items-center gap-2 text-sm"
