@@ -17,7 +17,7 @@ const SECTIONS = [
 ];
 
 export default function SettingsPage() {
-  const { user, loadUser } = useAuthStore();
+  const { user } = useAuthStore();
   const [section, setSection] = useState("profile");
   const [saved, setSaved]     = useState(false);
   const [saving, setSaving]   = useState(false);
@@ -42,8 +42,9 @@ export default function SettingsPage() {
       setSaving(true);
       setError("");
       try {
-        await api.patch("/auth/me", { name, email });
-        await loadUser();
+        const res = await api.patch("/auth/me", { name, email });
+        // Update the store directly with the response so the sidebar refreshes immediately
+        useAuthStore.setState({ user: res.data.data });
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
       } catch {

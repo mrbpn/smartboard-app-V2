@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, BookOpen, HelpCircle, PenTool,
   Video, Settings, LogOut, Zap, ChevronRight,
@@ -19,7 +19,13 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuthStore();
+
+  async function handleLogout() {
+    await logout();
+    router.push("/login");
+  }
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-56 bg-ink-900 flex flex-col z-40 border-r border-ink-700">
@@ -71,7 +77,7 @@ export default function Sidebar() {
           </div>
         </div>
         <button
-          onClick={() => logout()}
+          onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-ink-400 hover:text-coral-300 hover:bg-ink-700 transition-all text-sm mt-0.5"
         >
           <LogOut size={15} />
