@@ -47,9 +47,10 @@ export async function POST(req: Request) {
 
     if (isVision && image) {
       const base64 = image.replace(/^data:image\/\w+;base64,/, "");
+      const mimeType = image.startsWith("data:image/jpeg") ? "image/jpeg" : "image/png";
       parts = [
         { text: VISION_PROMPTS[action] },
-        { inline_data: { mime_type: "image/png", data: base64 } },
+        { inline_data: { mime_type: mimeType, data: base64 } },
       ];
     } else if (isText && text) {
       parts = [{ text: TEXT_PROMPTS[action](text) }];
@@ -58,8 +59,9 @@ export async function POST(req: Request) {
         ? `${question}\n\n(Context: the whiteboard image is attached)`
         : question;
       const base64 = image?.replace(/^data:image\/\w+;base64,/, "");
+      const mime   = image?.startsWith("data:image/jpeg") ? "image/jpeg" : "image/png";
       parts = base64
-        ? [{ text: prompt }, { inline_data: { mime_type: "image/png", data: base64 } }]
+        ? [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }]
         : [{ text: prompt }];
     } else {
       return NextResponse.json({ data: { result: "Please provide image or text content." } });
@@ -79,8 +81,9 @@ export async function POST(req: Request) {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      console.error("[whiteboard/ai] Gemini error:", err);
-      return NextResponse.json({ data: { result: "AI request failed. Please try again." } });
+      console.error("[whiteboard/ai] Gemini error:", JSON.stringify(err));
+      const msg = err?.error?.message ?? `Gemini API error ${response.status}`;
+      return NextResponse.json({ data: { result: `❌ ${msg}` } });
     }
 
     const geminiData = await response.json();

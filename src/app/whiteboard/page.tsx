@@ -137,9 +137,17 @@ export default function WhiteboardPage() {
   }
 
   // ── AI helpers ────────────────────────────────────────────
+  // Resize canvas to max 800x450 before sending to Gemini (reduces payload)
   function getCanvasImage() {
     const canvas = canvasRef.current;
-    return canvas ? canvas.toDataURL("image/png") : null;
+    if (!canvas) return null;
+    const offscreen = document.createElement("canvas");
+    offscreen.width  = 800;
+    offscreen.height = 450;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return canvas.toDataURL("image/jpeg", 0.8);
+    ctx.drawImage(canvas, 0, 0, 800, 450);
+    return offscreen.toDataURL("image/jpeg", 0.8); // JPEG at 80% quality — much smaller
   }
 
   async function callAI(action: string, opts: { useImage?: boolean; useText?: boolean; q?: string } = {}) {
