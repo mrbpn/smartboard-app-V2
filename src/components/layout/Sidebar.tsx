@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, BookOpen, HelpCircle, PenTool,
-  Video, Settings, LogOut, Zap, ChevronRight,
+  Video, Settings, LogOut, Zap, ChevronRight, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store";
@@ -17,7 +17,7 @@ const NAV = [
   { href: "/settings",   label: "Settings",   icon: Settings },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
@@ -28,17 +28,39 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-56 bg-ink-900 flex flex-col z-40 border-r border-ink-700">
-      {/* Logo */}
+    <>
+      {/* Collapsed tab — visible only when sidebar is hidden */}
+      {!open && (
+        <button
+          onClick={onToggle}
+          title="Open menu"
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-50 bg-ink-800 border border-ink-700 border-l-0 rounded-r-lg px-1.5 py-3 text-ink-300 hover:text-chalk hover:bg-ink-700 transition-all shadow-lg"
+        >
+          <PanelLeftOpen size={16} />
+        </button>
+      )}
+
+    <aside
+      className="fixed left-0 top-0 h-screen w-56 bg-ink-900 flex flex-col z-40 border-r border-ink-700 transition-transform duration-300"
+      style={{ transform: open ? "translateX(0)" : "translateX(-100%)" }}
+    >
+      {/* Logo + collapse toggle */}
       <div className="px-5 py-5 border-b border-ink-700">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-md bg-sage-400 flex items-center justify-center flex-shrink-0">
             <Zap size={14} className="text-ink-900" />
           </div>
-          <div>
+          <div className="flex-1">
             <p className="font-display text-chalk text-base leading-none tracking-wide">DeepBoard</p>
             <p className="text-ink-300 text-[10px] mt-0.5 font-mono">Smart Classroom</p>
           </div>
+          <button
+            onClick={onToggle}
+            title="Collapse menu"
+            className="text-ink-500 hover:text-chalk transition-colors p-0.5 rounded"
+          >
+            <PanelLeftClose size={15} />
+          </button>
         </div>
       </div>
 
@@ -85,5 +107,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }
