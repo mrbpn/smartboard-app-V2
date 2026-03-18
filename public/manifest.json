@@ -1,0 +1,47 @@
+{
+  "name": "DeepBoard — Smart Classroom",
+  "short_name": "DeepBoard",
+  "description": "AI-powered lesson management for Dahua DeepHub smartboards",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#1e1d18",
+  "theme_color": "#1e1d18",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-wide.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Whiteboard",
+      "short_name": "Board",
+      "url": "/whiteboard",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Lessons",
+      "short_name": "Lessons",
+      "url": "/lessons",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

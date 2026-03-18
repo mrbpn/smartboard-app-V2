@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#1e1d18"/>
+  <!-- Zap / lightning bolt (DeepBoard logo) -->
+  <polygon points="300,60 180,280 256,280 212,452 340,220 260,220" fill="#7fb069" opacity="0.95"/>
+  <!-- Subtle board lines -->
+  <line x1="80" y1="380" x2="432" y2="380" stroke="#3a3930" stroke-width="6" stroke-linecap="round"/>
+  <line x1="80" y1="420" x2="300" y2="420" stroke="#3a3930" stroke-width="6" stroke-linecap="round"/>
+</svg>
