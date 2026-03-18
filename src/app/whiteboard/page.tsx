@@ -42,8 +42,6 @@ export default function WhiteboardPage() {
   const [thickness, setThickness]   = useState(2);
   const [strokes, setStrokes]       = useState<Stroke[]>([]);
   const [redoStack, setRedoStack]   = useState<Stroke[]>([]);
-  const [drawing, setDrawing]       = useState(false);
-  const [current, setCurrent]       = useState<Stroke | null>(null);
   const [zoom, setZoom]             = useState(100);
 
   // AI panel state
@@ -53,31 +51,18 @@ export default function WhiteboardPage() {
   const [pastedText, setPastedText] = useState("");
   const [question, setQuestion]     = useState("");
 
-  // ── Prevent pull-to-refresh, page scroll, and pinch-to-zoom ──
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // ── Multi-touch / multi-pointer tracking ──────────────────
+  // Key: touch.identifier (0-9 for fingers), -1 for mouse
+  const activeRef = useRef<Map<number, Stroke>>(new Map());
+  const [tick, setTick] = useState(0); // bump to trigger redraw
 
-    // Block scroll/pull-to-refresh on the canvas (passive:false required)
-    const prevent = (e: TouchEvent) => { e.preventDefault(); };
-    canvas.addEventListener("touchstart", prevent, { passive: false });
-    canvas.addEventListener("touchmove",  prevent, { passive: false });
-
-    // Block multi-finger pinch-zoom at the document level (Safari uses gesturestart/change)
-    const preventGesture = (e: Event) => { e.preventDefault(); };
-    const preventMultiTouch = (e: TouchEvent) => { if (e.touches.length > 1) e.preventDefault(); };
-    document.addEventListener("gesturestart",  preventGesture,    { passive: false });
-    document.addEventListener("gesturechange", preventGesture,    { passive: false });
-    document.addEventListener("touchmove",     preventMultiTouch, { passive: false });
-
-    return () => {
-      canvas.removeEventListener("touchstart", prevent);
-      canvas.removeEventListener("touchmove",  prevent);
-      document.removeEventListener("gesturestart",  preventGesture);
-      document.removeEventListener("gesturechange", preventGesture);
-      document.removeEventListener("touchmove",     preventMultiTouch);
-    };
-  }, []);
+  // Refs so imperative touch handlers always see latest values
+  const toolRef      = useRef(tool);
+  const colorRef     = useRef(color);
+  const thicknessRef = useRef(thickness);
+  useEffect(() => { toolRef.current = tool; },      [tool]);
+  useEffect(() => { colorRef.current = color; },    [color]);
+  useEffect(() => { thicknessRef.current = thickness; }, [thickness]);
 
   // ── Canvas redraw ─────────────────────────────────────────
   useEffect(() => {
@@ -91,8 +76,8 @@ export default function WhiteboardPage() {
     ctx.strokeStyle = "#ede8dd"; ctx.lineWidth = 0.5;
     for (let x = 0; x < canvas.width; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
     for (let y = 0; y < canvas.height; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
-    [...strokes, ...(current ? [current] : [])].forEach((s) => drawStroke(ctx, s));
-  }, [strokes, current]);
+    [...strokes, ...Array.from(activeRef.current.values())].forEach((s) => drawStroke(ctx, s));
+  }, [strokes, tick]);
 
   function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
     if (s.points.length < 1) return;
@@ -125,35 +110,114 @@ export default function WhiteboardPage() {
     ctx.restore();
   }
 
-  function getPos(e: React.MouseEvent | React.TouchEvent): [number,number] {
+  // ── Coordinate helpers ───────────────────────────────────
+  function getPosFromClient(clientX: number, clientY: number): [number, number] {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    const sx = canvas.width / rect.width; const sy = canvas.height / rect.height;
-    if ("touches" in e) return [(e.touches[0].clientX-rect.left)*sx, (e.touches[0].clientY-rect.top)*sy];
-    return [(e.clientX-rect.left)*sx, (e.clientY-rect.top)*sy];
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    return [(clientX - rect.left) * sx, (clientY - rect.top) * sy];
   }
 
-  function onDown(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
+  function getMousePos(e: React.MouseEvent): [number, number] {
+    return getPosFromClient(e.clientX, e.clientY);
+  }
+
+  // ── Mouse handlers (single pointer) ───────────────────────
+  function onMouseDown(e: React.MouseEvent) {
     if (tool === "text") {
-      const pos = getPos(e);
+      const pos = getMousePos(e);
       const t = window.prompt("Enter text:");
       if (t) setStrokes((s) => [...s, { id:`s-${Date.now()}`, tool:"text", color, thickness, points:[pos], text:t }]);
       return;
     }
-    setDrawing(true); setRedoStack([]);
-    setCurrent({ id:`s-${Date.now()}`, tool, color, thickness: tool==="eraser"?24:thickness, points:[getPos(e)] });
+    setRedoStack([]);
+    const stroke: Stroke = { id:`m-${Date.now()}`, tool, color, thickness: tool==="eraser"?24:thickness, points:[getMousePos(e)] };
+    activeRef.current.set(-1, stroke);
+    setTick(t => t + 1);
   }
-  function onMove(e: React.MouseEvent | React.TouchEvent) {
-    if (!drawing || !current) return; e.preventDefault();
-    setCurrent((p) => p ? {...p, points:[...p.points, getPos(e)]} : p);
+  function onMouseMove(e: React.MouseEvent) {
+    const s = activeRef.current.get(-1);
+    if (!s) return;
+    activeRef.current.set(-1, { ...s, points: [...s.points, getMousePos(e)] });
+    setTick(t => t + 1);
   }
-  function onUp() {
-    if (!drawing || !current) return;
-    setDrawing(false);
-    if (current.points.length > 1) setStrokes((s) => [...s, current]);
-    setCurrent(null);
+  function onMouseUp() {
+    const s = activeRef.current.get(-1);
+    if (s && s.points.length > 1) setStrokes(prev => [...prev, s]);
+    activeRef.current.delete(-1);
+    setTick(t => t + 1);
   }
+
+  // ── Touch handlers — imperative with passive:false ────────
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function touchPos(touch: Touch): [number, number] {
+      return getPosFromClient(touch.clientX, touch.clientY);
+    }
+
+    function handleTouchStart(e: TouchEvent) {
+      e.preventDefault(); // block pull-to-refresh & pinch-zoom
+      Array.from(e.changedTouches).forEach(touch => {
+        const t = toolRef.current;
+        const stroke: Stroke = {
+          id: `t-${touch.identifier}-${Date.now()}`,
+          tool: t,
+          color: colorRef.current,
+          thickness: t === "eraser" ? 24 : thicknessRef.current,
+          points: [touchPos(touch)],
+        };
+        activeRef.current.set(touch.identifier, stroke);
+      });
+      setTick(t => t + 1);
+    }
+
+    function handleTouchMove(e: TouchEvent) {
+      e.preventDefault(); // block scroll & pinch-zoom
+      Array.from(e.changedTouches).forEach(touch => {
+        const s = activeRef.current.get(touch.identifier);
+        if (!s) return;
+        activeRef.current.set(touch.identifier, { ...s, points: [...s.points, touchPos(touch)] });
+      });
+      setTick(t => t + 1);
+    }
+
+    function handleTouchEnd(e: TouchEvent) {
+      const completed: Stroke[] = [];
+      Array.from(e.changedTouches).forEach(touch => {
+        const s = activeRef.current.get(touch.identifier);
+        if (s && s.points.length > 1) completed.push(s);
+        activeRef.current.delete(touch.identifier);
+      });
+      if (completed.length > 0) {
+        setRedoStack([]);
+        setStrokes(prev => [...prev, ...completed]);
+      }
+      setTick(t => t + 1);
+    }
+
+    // Block Safari pinch-zoom gesture events
+    const preventGesture = (e: Event) => e.preventDefault();
+
+    canvas.addEventListener("touchstart",  handleTouchStart, { passive: false });
+    canvas.addEventListener("touchmove",   handleTouchMove,  { passive: false });
+    canvas.addEventListener("touchend",    handleTouchEnd,   { passive: false });
+    canvas.addEventListener("touchcancel", handleTouchEnd,   { passive: false });
+    document.addEventListener("gesturestart",  preventGesture, { passive: false });
+    document.addEventListener("gesturechange", preventGesture, { passive: false });
+
+    return () => {
+      canvas.removeEventListener("touchstart",  handleTouchStart);
+      canvas.removeEventListener("touchmove",   handleTouchMove);
+      canvas.removeEventListener("touchend",    handleTouchEnd);
+      canvas.removeEventListener("touchcancel", handleTouchEnd);
+      document.removeEventListener("gesturestart",  preventGesture);
+      document.removeEventListener("gesturechange", preventGesture);
+    };
+  }, []); // runs once — refs keep values fresh
+
   const undo = useCallback(() => setStrokes((s) => { if (!s.length) return s; setRedoStack((r)=>[...r,s[s.length-1]]); return s.slice(0,-1); }), []);
   const redo = useCallback(() => setRedoStack((r) => { if (!r.length) return r; setStrokes((s)=>[...s,r[r.length-1]]); return r.slice(0,-1); }), []);
   function clear() { setStrokes([]); setRedoStack([]); }
@@ -163,7 +227,6 @@ export default function WhiteboardPage() {
   }
 
   // ── AI helpers ────────────────────────────────────────────
-  // Resize canvas to max 800x450 before sending to Gemini (reduces payload)
   function getCanvasImage() {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -173,7 +236,7 @@ export default function WhiteboardPage() {
     const ctx = offscreen.getContext("2d");
     if (!ctx) return canvas.toDataURL("image/jpeg", 0.8);
     ctx.drawImage(canvas, 0, 0, 800, 450);
-    return offscreen.toDataURL("image/jpeg", 0.8); // JPEG at 80% quality — much smaller
+    return offscreen.toDataURL("image/jpeg", 0.8);
   }
 
   async function callAI(action: string, opts: { useImage?: boolean; useText?: boolean; q?: string } = {}) {
@@ -266,11 +329,12 @@ export default function WhiteboardPage() {
         <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-ink-900">
           <canvas
             ref={canvasRef} width={1600} height={900}
-            onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-            onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
-            style={{ transform:`scale(${zoom/100})`, transformOrigin:"center",
+            onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+            style={{
+              transform:`scale(${zoom/100})`, transformOrigin:"center",
               cursor: tool==="eraser"?"cell": tool==="text"?"text":"crosshair",
-              touchAction: "none" }}
+              touchAction: "none",
+            }}
             className="rounded-xl shadow-2xl max-w-full"
           />
         </div>
