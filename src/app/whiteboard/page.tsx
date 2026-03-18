@@ -53,6 +53,32 @@ export default function WhiteboardPage() {
   const [pastedText, setPastedText] = useState("");
   const [question, setQuestion]     = useState("");
 
+  // ── Prevent pull-to-refresh, page scroll, and pinch-to-zoom ──
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Block scroll/pull-to-refresh on the canvas (passive:false required)
+    const prevent = (e: TouchEvent) => { e.preventDefault(); };
+    canvas.addEventListener("touchstart", prevent, { passive: false });
+    canvas.addEventListener("touchmove",  prevent, { passive: false });
+
+    // Block multi-finger pinch-zoom at the document level (Safari uses gesturestart/change)
+    const preventGesture = (e: Event) => { e.preventDefault(); };
+    const preventMultiTouch = (e: TouchEvent) => { if (e.touches.length > 1) e.preventDefault(); };
+    document.addEventListener("gesturestart",  preventGesture,    { passive: false });
+    document.addEventListener("gesturechange", preventGesture,    { passive: false });
+    document.addEventListener("touchmove",     preventMultiTouch, { passive: false });
+
+    return () => {
+      canvas.removeEventListener("touchstart", prevent);
+      canvas.removeEventListener("touchmove",  prevent);
+      document.removeEventListener("gesturestart",  preventGesture);
+      document.removeEventListener("gesturechange", preventGesture);
+      document.removeEventListener("touchmove",     preventMultiTouch);
+    };
+  }, []);
+
   // ── Canvas redraw ─────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -182,7 +208,7 @@ export default function WhiteboardPage() {
   ];
 
   return (
-    <div className="flex flex-col h-screen bg-ink-900">
+    <div className="flex flex-col h-screen bg-ink-900" style={{ overscrollBehavior: "none" }}>
       {/* ── Top toolbar ── */}
       <div className="flex items-center gap-2 px-3 py-2 bg-ink-800 border-b border-ink-700 flex-shrink-0 flex-wrap">
         <h1 className="font-display text-chalk text-base mr-1">Whiteboard</h1>
@@ -243,7 +269,8 @@ export default function WhiteboardPage() {
             onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
             onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
             style={{ transform:`scale(${zoom/100})`, transformOrigin:"center",
-              cursor: tool==="eraser"?"cell": tool==="text"?"text":"crosshair" }}
+              cursor: tool==="eraser"?"cell": tool==="text"?"text":"crosshair",
+              touchAction: "none" }}
             className="rounded-xl shadow-2xl max-w-full"
           />
         </div>
