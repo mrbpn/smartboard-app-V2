@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
+  const pathname = usePathname();
+  const [open, setOpen] = useState(() => !pathname.startsWith("/whiteboard"));
 
   return (
     <div className="flex min-h-screen bg-chalk">
