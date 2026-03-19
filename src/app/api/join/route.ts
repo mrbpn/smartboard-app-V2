@@ -37,12 +37,12 @@ export async function GET(req: Request) {
         session_id: session.id,
         quiz_title: quiz?.title ?? "Quiz",
         time_limit_sec: quiz?.time_limit_sec ?? 30,
+        // correct_answer is intentionally omitted — graded server-side on submit
         questions: qs.map((q) => ({
           id: q.id,
           body: q.body,
           type: q.type,
           options: q.options,
-          correct: q.correct_answer,
         })),
       },
     });
@@ -52,11 +52,27 @@ export async function GET(req: Request) {
   }
 }
 
-// POST /api/join — submit an answer
+// POST /api/join — submit an answer (is_correct graded server-side, never trusted from client)
 export async function POST(req: Request) {
   try {
-    const { session_id, question_id, student_alias, answer, is_correct } = await req.json();
+    const { session_id, question_id, student_alias, answer } = await req.json();
+    if (!session_id || !question_id || !student_alias || answer === undefined) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
     const { responses } = await import("@/lib/schema");
+
+    // Grade server-side: look up the correct answer from DB
+    const [question] = await db
+      .select({ correct_answer: questionsTable.correct_answer })
+      .from(questionsTable)
+      .where(eq(questionsTable.id, question_id))
+      .limit(1);
+
+    const is_correct = question
+      ? String(question.correct_answer).trim().toLowerCase() ===
+        String(answer).trim().toLowerCase()
+      : false;
 
     await db.insert(responses).values({
       session_id,
@@ -66,7 +82,7 @@ export async function POST(req: Request) {
       is_correct,
     });
 
-    return NextResponse.json({ data: { ok: true } });
+    return NextResponse.json({ data: { ok: true, is_correct } });
   } catch (e) {
     console.error("[POST /api/join]", e);
     return NextResponse.json({ error: "Failed to submit answer" }, { status: 500 });
